@@ -52,7 +52,7 @@ seap_xls = load_excel_file(SEAP_FILE)
 # 3. Sidebar Navigation
 # ==========================================
 with st.sidebar:
-    st.title("⚡ EdgePro Platform")
+    st.title("⚡ EEER Platform")
     st.caption("EG EEER & DISCOs SEAP Management")
     st.markdown("---")
     
