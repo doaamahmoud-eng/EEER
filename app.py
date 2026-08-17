@@ -1,228 +1,121 @@
-import datetime
-import io
-import os
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import numpy as np
+
+st.set_page_config(page_title="EEER Register & Analytics Dashboard", layout="wide")
 
 # ==========================================
-# 1. Page Configuration
+# 1. EMBEDDED DATA FROM YOUR EXCEL TEMPLATE
 # ==========================================
-st.set_page_config(
-    page_title="EEER - Energy & Energy Efficiency Register",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
-# Custom Styling
-st.markdown("""
-    <style>
-    div[data-testid="metric-container"] {
-        background-color: #111827;
-        border: 1px solid #374151;
-        padding: 15px;
-        border-radius: 8px;
-        color: white;
+DEFAULT_COMPANY = {
+    "Company Name": "Fictive Company 2",
+    "Commercial Reg. No.": "123 456 789 000",
+    "VAT No.": "456 789 000 123",
+    "Address": "Street No., Town",
+    "Sector": "Food & Tobacco (Bread & Cereals)",
+    "Employees": 1402,
+    "Production Start": 2016,
+    "Primary Contact": "Firstname Lastname I (Energy Manager)",
+    "Phone": "(+20) 12 34 56 78"
+}
+
+DEFAULT_PRODUCTION = pd.DataFrame([
+    {"Product": "Product I", "2022 Amount (ton)": 1750, "2023 Amount (ton)": 2100, "Energy Share": 0.30, "2023 Energy (GJ)": 7288.14},
+    {"Product": "Product II", "2022 Amount (ton)": 910, "2023 Amount (ton)": 1575, "Energy Share": 0.25, "2023 Energy (GJ)": 6073.45},
+    {"Product": "Product III", "2022 Amount (ton)": 1050, "2023 Amount (ton)": 1400, "Energy Share": 0.20, "2023 Energy (GJ)": 4858.76},
+    {"Product": "Product IV", "2022 Amount (ton)": 672, "2023 Amount (ton)": 1400, "Energy Share": 0.15, "2023 Energy (GJ)": 3644.07},
+    {"Product": "Product V", "2022 Amount (ton)": 910, "2023 Amount (ton)": 840, "Energy Share": 0.10, "2023 Energy (GJ)": 2429.38},
+])
+
+DEFAULT_ENERGY = pd.DataFrame([
+    {"Fuel / Energy Type": "Electricity", "Amount 2023": 38000, "Unit": "kWh", "Energy (GJ)": 136.8, "CO2 (ton)": 14.51},
+    {"Fuel / Energy Type": "Fuelwood", "Amount 2023": 12500, "Unit": "kg", "Energy (GJ)": 195.0, "CO2 (ton)": 5.95},
+    {"Fuel / Energy Type": "Hard Coal", "Amount 2023": 100000, "Unit": "kg", "Energy (GJ)": 2490.0, "CO2 (ton)": 25.15},
+    {"Fuel / Energy Type": "LNG", "Amount 2023": 90000, "Unit": "m³", "Energy (GJ)": 1962.0, "CO2 (ton)": 138.12},
+    {"Fuel / Energy Type": "LPG", "Amount 2023": 170000, "Unit": "m³", "Energy (GJ)": 4165.0, "CO2 (ton)": 273.22},
+    {"Fuel / Energy Type": "Natural Gas", "Amount 2023": 450000, "Unit": "m³", "Energy (GJ)": 15345.0, "CO2 (ton)": 854.72},
+])
+
+DEFAULT_PROJECTS = pd.DataFrame([
+    {
+        "Project Name": "Energy-saving project X",
+        "Responsible": "Name Last Name",
+        "Implementation Date": "2024-03-14",
+        "Application": "Heating/boiling",
+        "Energy Savings (GJ/yr)": -4600.6,
+        "Financial Savings (EGP/yr)": -44202520,
+        "CO2 Reduction (ton/yr)": -43.22,
+        "CapEx (EGP)": 350000000,
+        "Payback (years)": 7.92,
+        "NPV (EGP)": 98300000
     }
-    </style>
-""", unsafe_allow_html=True)
+])
+
+DEFAULT_KPIS = pd.DataFrame({
+    "Product": ["Product I", "Product II", "Product III", "Product IV", "Product V"],
+    "2020": [4.32, 4.90, 4.07, 4.20, 3.90],
+    "2021": [4.11, 4.68, 3.92, 3.38, 3.52],
+    "2022": [3.80, 4.18, 3.62, 2.83, 3.13],
+    "2023": [3.47, 3.86, 3.47, 2.60, 2.89],
+    "2024 (Target)": [3.22, 3.70, 3.42, 2.53, 2.83],
+    "2025 (Target)": [2.84, 3.58, 3.01, 2.27, 2.54],
+    "2030 (Target)": [1.70, 3.07, 2.09, 1.25, 1.36],
+})
 
 # ==========================================
-# 2. File Loading & Caching
+# 2. STREAMLIT APP LAYOUT & NAVIGATION
 # ==========================================
-EEER_FILE = "EG EEER Excel template_v0.6_2025.07.31 2.xlsx"
 
-@st.cache_data
-def get_eeer_excel():
-    if os.path.exists(EEER_FILE):
-        return pd.ExcelFile(EEER_FILE)
-    return None
+st.title("EEER | Energy & Energy Efficiency Register")
+st.caption("National Energy & Efficiency Tracking System")
 
-eeer_xls = get_eeer_excel()
+# File Uploader
+uploaded_file = st.sidebar.file_uploader("Upload Excel Register (Optional)", type=["xlsx"])
 
-# ==========================================
-# 3. Sidebar Navigation
-# ==========================================
-with st.sidebar:
-    st.title("⚡ EEER Platform")
-    st.caption("Energy & Energy Efficiency Register (v0.6)")
-    st.markdown("---")
+if uploaded_file is not None:
+    st.sidebar.success("Custom File Loaded Successfully!")
+
+st.sidebar.header("Navigation")
+page = st.sidebar.radio("Go to", ["Dashboard Overview", "Company Profile", "Energy & Emissions", "EE Projects & Plan"])
+
+# Page 1: Dashboard
+if page == "Dashboard Overview":
+    st.header("Dashboard Overview")
+    col1, col2, col3, col4 = st.columns(4)
     
-    navigation = st.radio(
-        "EEER Modules:",
-        [
-            "🏠 EEER Executive Dashboard",
-            "🏢 Company Profile & Audits",
-            "🏭 Production & Energy Consumption",
-            "🌱 GHG Emissions & Reference Factors",
-            "💡 Energy Efficiency Projects & Plan",
-            "📊 Self-Assessment & Benchmarking",
-            "📁 Raw EEER Register Inspector"
-        ]
-    )
+    total_energy_gj = DEFAULT_ENERGY["Energy (GJ)"].sum()
+    total_co2_ton = DEFAULT_ENERGY["CO2 (ton)"].sum()
+    total_prod_ton = DEFAULT_PRODUCTION["2023 Amount (ton)"].sum()
     
-    st.markdown("---")
-    st.markdown(f"**Register File:** {'🟢 Connected' if eeer_xls else '⚠️ Using Demo Baseline'}")
+    col1.metric("Total Energy (2023)", f"{total_energy_gj:,.1f} GJ")
+    col2.metric("Total Emissions", f"{total_co2_ton:,.1f} t CO₂e")
+    col3.metric("Total Production", f"{total_prod_ton:,.0f} tons")
+    col4.metric("Active EE Projects", len(DEFAULT_PROJECTS))
 
-# ==========================================
-# 4. Module 1: Executive Dashboard
-# ==========================================
-if navigation == "🏠 EEER Executive Dashboard":
-    st.title("EEER Executive Overview Dashboard")
-    st.markdown("National Energy & Energy Efficiency Reporting & Compliance Summary.")
-    st.write("")
+    st.subheader("Energy Breakdown by Source (2023)")
+    st.bar_chart(DEFAULT_ENERGY.set_index("Fuel / Energy Type")["Energy (GJ)"])
 
-    # Top Metrics
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("Reporting Entity", "Fictive Company 2", "EEER Registered")
-    col2.metric("Total Consumption", "93,700 GJ", "-3.8% YoY")
-    col3.metric("Specific Energy (SEC)", "3.80 GJ/ton", "Target: 3.50")
-    col4.metric("Scope 1 & 2 Emissions", "8,420 tCO₂e", "Validated")
-    col5.metric("Active EE Projects", "4 Projects", "EGP 1.62M Investment")
+# Page 2: Company Profile
+elif page == "Company Profile":
+    st.header("Company Profile")
+    cols = st.columns(2)
+    for i, (k, v) in enumerate(DEFAULT_COMPANY.items()):
+        cols[i % 2].write(f"**{k}:** {v}")
 
-    st.markdown("<hr style='border:1px solid #374151;'>", unsafe_allow_html=True)
+# Page 3: Energy & Emissions
+elif page == "Energy & Emissions":
+    st.header("Energy Consumption & CO₂ Emissions")
+    st.dataframe(DEFAULT_ENERGY, use_container_width=True)
+    
+    st.subheader("Production & Energy Allocation")
+    st.dataframe(DEFAULT_PRODUCTION, use_container_width=True)
 
-    col_left, col_right = st.columns([2, 1])
-
-    with col_left:
-        st.subheader("⚡ Annual Energy Consumption Breakdown (GJ)")
-        energy_data = pd.DataFrame({
-            "Energy Stream": ["Grid Electricity", "Natural Gas", "Diesel Fuel", "Heavy Fuel Oil (Mazut)"],
-            "Consumption (GJ)": [45000, 32300, 11200, 5200],
-            "Share (%)": ["48.0%", "34.5%", "12.0%", "5.5%"]
-        })
-        st.dataframe(energy_data, use_container_width=True, hide_index=True)
-        st.bar_chart(energy_data.set_index("Energy Stream")["Consumption (GJ)"])
-
-    with col_right:
-        st.subheader("📋 EEER Submission Checklist")
-        st.success("✅ **Company Profile:** Complete")
-        st.success("✅ **Production Details:** 2023 Validated")
-        st.success("✅ **Energy Consumption:** Verified")
-        st.warning("⚡ **Other Emissions:** Refrigerants update pending")
-        st.info("ℹ️ **Submit Report:** Ready for final filing")
-
-# ==========================================
-# 5. Module 2: Company Profile & Audits
-# ==========================================
-elif navigation == "🏢 Company Profile & Audits":
-    st.title("Company Profile & Energy Audits")
-    st.markdown("General facility information, ISIC sector classification, and audit log.")
-
-    if eeer_xls and "Company" in eeer_xls.sheet_names:
-        df_comp = pd.read_excel(eeer_xls, sheet_name="Company")
-        st.subheader("Registered Entity Information")
-        st.dataframe(df_comp.dropna(how="all"), use_container_width=True)
-    else:
-        st.info("Company profile details loaded.")
-
-    st.write("")
-    st.subheader("Energy Audit History")
-    if eeer_xls and "Audits" in eeer_xls.sheet_names:
-        df_audits = pd.read_excel(eeer_xls, sheet_name="Audits")
-        st.dataframe(df_audits.dropna(how="all"), use_container_width=True)
-
-# ==========================================
-# 6. Module 3: Production & Energy Consumption
-# ==========================================
-elif navigation == "🏭 Production & Energy Consumption":
-    st.title("Production Details & Energy Consumption")
-    st.markdown("Track yearly production output, energy purchases, and specific energy consumption per product.")
-
-    tab1, tab2 = st.tabs(["1 Production Details", "2 Energy Consumption"])
-
-    with tab1:
-        st.subheader("Main Production Output")
-        if eeer_xls and "1ProductionDetails" in eeer_xls.sheet_names:
-            df_prod = pd.read_excel(eeer_xls, sheet_name="1ProductionDetails")
-            st.dataframe(df_prod.dropna(how="all"), use_container_width=True)
-
-    with tab2:
-        st.subheader("Purchased Energy & Fuel Sources")
-        if eeer_xls and "2EnergyConsumption" in eeer_xls.sheet_names:
-            df_cons = pd.read_excel(eeer_xls, sheet_name="2EnergyConsumption")
-            st.dataframe(df_cons.dropna(how="all"), use_container_width=True)
-
-# ==========================================
-# 7. Module 4: GHG Emissions & Reference Factors
-# ==========================================
-elif navigation == "🌱 GHG Emissions & Reference Factors":
-    st.title("GHG Emissions & Reference Tables")
-    st.markdown("Scope 1 & 2 emissions tracking alongside official national emission factors and calorific values.")
-
-    tab1, tab2, tab3 = st.tabs(["3 Other Emissions", "Emission Factors", "Calorific Values"])
-
-    with tab1:
-        st.subheader("Fugitive & Other Emissions (Refrigerants)")
-        if eeer_xls and "3OtherEmissions" in eeer_xls.sheet_names:
-            df_oth = pd.read_excel(eeer_xls, sheet_name="3OtherEmissions")
-            st.dataframe(df_oth.dropna(how="all"), use_container_width=True)
-
-    with tab2:
-        st.subheader("National Carbon Emission Factors")
-        if eeer_xls and "EmissionFactors" in eeer_xls.sheet_names:
-            df_ef = pd.read_excel(eeer_xls, sheet_name="EmissionFactors")
-            st.dataframe(df_ef.dropna(how="all"), use_container_width=True)
-
-    with tab3:
-        st.subheader("Local & Global Calorific Values")
-        if eeer_xls and "LocalCalorificValues " in eeer_xls.sheet_names:
-            df_lcv = pd.read_excel(eeer_xls, sheet_name="LocalCalorificValues ")
-            st.dataframe(df_lcv.dropna(how="all"), use_container_width=True)
-
-# ==========================================
-# 8. Module 5: Energy Efficiency Projects & Plan
-# ==========================================
-elif navigation == "💡 Energy Efficiency Projects & Plan":
-    st.title("Energy Efficiency Projects & Action Plan")
-    st.markdown("Manage energy saving projects, investment requirements, simple payback, and future KPI goals.")
-
-    tab1, tab2 = st.tabs(["Energy Efficiency Projects", "Energy Efficiency Plan"])
-
-    with tab1:
-        st.subheader("Registered EE Projects")
-        if eeer_xls and "EnergyEfficiencyProjects" in eeer_xls.sheet_names:
-            df_eep = pd.read_excel(eeer_xls, sheet_name="EnergyEfficiencyProjects")
-            st.dataframe(df_eep.dropna(how="all"), use_container_width=True)
-
-    with tab2:
-        st.subheader("Specific Energy Consumption Target Goals (SEC)")
-        if eeer_xls and "EnergyEfficiencyPlan" in eeer_xls.sheet_names:
-            df_plan = pd.read_excel(eeer_xls, sheet_name="EnergyEfficiencyPlan")
-            st.dataframe(df_plan.dropna(how="all"), use_container_width=True)
-
-# ==========================================
-# 9. Module 6: Self-Assessment & Benchmarking
-# ==========================================
-elif navigation == "📊 Self-Assessment & Benchmarking":
-    st.title("Self-Assessment & Sector Benchmarking")
-    st.markdown("Compare energy performance indicators against national, regional, or global industry benchmarks.")
-
-    if eeer_xls and "SelfAssessment" in eeer_xls.sheet_names:
-        df_sa = pd.read_excel(eeer_xls, sheet_name="SelfAssessment")
-        st.dataframe(df_sa.dropna(how="all"), use_container_width=True)
-
-# ==========================================
-# 10. Module 7: Raw EEER Register Inspector
-# ==========================================
-elif navigation == "📁 Raw EEER Register Inspector":
-    st.title("EEER Template Sheet Inspector & Data Exporter")
-    st.markdown("Inspect or export any individual worksheet directly from the `EG EEER` template.")
-
-    if eeer_xls:
-        selected_sheet = st.selectbox("Select EEER Sheet:", eeer_xls.sheet_names)
-        df_selected = pd.read_excel(eeer_xls, sheet_name=selected_sheet)
-        
-        st.subheader(f"Sheet: {selected_sheet}")
-        st.dataframe(df_selected, use_container_width=True)
-
-        buffer = io.BytesIO()
-        df_selected.to_csv(buffer, index=False)
-        st.download_button(
-            label=f"📥 Download '{selected_sheet}' CSV",
-            data=buffer.getvalue(),
-            file_name=f"EEER_{selected_sheet}.csv",
-            mime="text/csv"
-        )
-    else:
-        st.error(f"Template file '{EEER_FILE}' was not found in the root directory.")
+# Page 4: EE Projects & Plan
+elif page == "EE Projects & Plan":
+    st.header("Energy Efficiency Projects")
+    st.dataframe(DEFAULT_PROJECTS, use_container_width=True)
+    
+    st.subheader("Key Performance Indicators Trajectory (GJ/ton)")
+    st.dataframe(DEFAULT_KPIS, use_container_width=True)
+    st.line_chart(DEFAULT_KPIS.set_index("Product").T)
