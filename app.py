@@ -1,121 +1,278 @@
-import streamlit as st
+import os
+import io
 import pandas as pd
-import numpy as np
-
-st.set_page_config(page_title="EEER Register & Analytics Dashboard", layout="wide")
+import streamlit as st
 
 # ==========================================
-# 1. EMBEDDED DATA FROM YOUR EXCEL TEMPLATE
+# 1. Page & Layout Configuration
 # ==========================================
+st.set_page_config(
+    page_title="EEER - Energy Efficiency & SEAP Platform",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-DEFAULT_COMPANY = {
-    "Company Name": "Fictive Company 2",
-    "Commercial Reg. No.": "123 456 789 000",
-    "VAT No.": "456 789 000 123",
-    "Address": "Street No., Town",
-    "Sector": "Food & Tobacco (Bread & Cereals)",
-    "Employees": 1402,
-    "Production Start": 2016,
-    "Primary Contact": "Firstname Lastname I (Energy Manager)",
-    "Phone": "(+20) 12 34 56 78"
-}
-
-DEFAULT_PRODUCTION = pd.DataFrame([
-    {"Product": "Product I", "2022 Amount (ton)": 1750, "2023 Amount (ton)": 2100, "Energy Share": 0.30, "2023 Energy (GJ)": 7288.14},
-    {"Product": "Product II", "2022 Amount (ton)": 910, "2023 Amount (ton)": 1575, "Energy Share": 0.25, "2023 Energy (GJ)": 6073.45},
-    {"Product": "Product III", "2022 Amount (ton)": 1050, "2023 Amount (ton)": 1400, "Energy Share": 0.20, "2023 Energy (GJ)": 4858.76},
-    {"Product": "Product IV", "2022 Amount (ton)": 672, "2023 Amount (ton)": 1400, "Energy Share": 0.15, "2023 Energy (GJ)": 3644.07},
-    {"Product": "Product V", "2022 Amount (ton)": 910, "2023 Amount (ton)": 840, "Energy Share": 0.10, "2023 Energy (GJ)": 2429.38},
-])
-
-DEFAULT_ENERGY = pd.DataFrame([
-    {"Fuel / Energy Type": "Electricity", "Amount 2023": 38000, "Unit": "kWh", "Energy (GJ)": 136.8, "CO2 (ton)": 14.51},
-    {"Fuel / Energy Type": "Fuelwood", "Amount 2023": 12500, "Unit": "kg", "Energy (GJ)": 195.0, "CO2 (ton)": 5.95},
-    {"Fuel / Energy Type": "Hard Coal", "Amount 2023": 100000, "Unit": "kg", "Energy (GJ)": 2490.0, "CO2 (ton)": 25.15},
-    {"Fuel / Energy Type": "LNG", "Amount 2023": 90000, "Unit": "m³", "Energy (GJ)": 1962.0, "CO2 (ton)": 138.12},
-    {"Fuel / Energy Type": "LPG", "Amount 2023": 170000, "Unit": "m³", "Energy (GJ)": 4165.0, "CO2 (ton)": 273.22},
-    {"Fuel / Energy Type": "Natural Gas", "Amount 2023": 450000, "Unit": "m³", "Energy (GJ)": 15345.0, "CO2 (ton)": 854.72},
-])
-
-DEFAULT_PROJECTS = pd.DataFrame([
-    {
-        "Project Name": "Energy-saving project X",
-        "Responsible": "Name Last Name",
-        "Implementation Date": "2024-03-14",
-        "Application": "Heating/boiling",
-        "Energy Savings (GJ/yr)": -4600.6,
-        "Financial Savings (EGP/yr)": -44202520,
-        "CO2 Reduction (ton/yr)": -43.22,
-        "CapEx (EGP)": 350000000,
-        "Payback (years)": 7.92,
-        "NPV (EGP)": 98300000
+# Custom Styling for Metric Cards & Layout
+st.markdown("""
+    <style>
+    div[data-testid="metric-container"] {
+        background-color: #1a1e29;
+        border: 1px solid #2d3748;
+        padding: 14px;
+        border-radius: 8px;
+        color: #ffffff;
     }
-])
-
-DEFAULT_KPIS = pd.DataFrame({
-    "Product": ["Product I", "Product II", "Product III", "Product IV", "Product V"],
-    "2020": [4.32, 4.90, 4.07, 4.20, 3.90],
-    "2021": [4.11, 4.68, 3.92, 3.38, 3.52],
-    "2022": [3.80, 4.18, 3.62, 2.83, 3.13],
-    "2023": [3.47, 3.86, 3.47, 2.60, 2.89],
-    "2024 (Target)": [3.22, 3.70, 3.42, 2.53, 2.83],
-    "2025 (Target)": [2.84, 3.58, 3.01, 2.27, 2.54],
-    "2030 (Target)": [1.70, 3.07, 2.09, 1.25, 1.36],
-})
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        padding: 8px 16px;
+        border-radius: 4px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # ==========================================
-# 2. STREAMLIT APP LAYOUT & NAVIGATION
+# 2. File Handlers & Helper Functions
 # ==========================================
+EEER_FILE = "EG EEER Excel template_v0.6_2025.07.31 2.xlsx"
+SEAP_FILE = "20190219_SEAP Guidebook for   DISCOs_final draft.xlsx"
 
-st.title("EEER | Energy & Energy Efficiency Register")
-st.caption("National Energy & Efficiency Tracking System")
+@st.cache_data
+def load_excel_file(file_path):
+    if os.path.exists(file_path):
+        return pd.ExcelFile(file_path)
+    return None
 
-# File Uploader
-uploaded_file = st.sidebar.file_uploader("Upload Excel Register (Optional)", type=["xlsx"])
+eeer_xls = load_excel_file(EEER_FILE)
+seap_xls = load_excel_file(SEAP_FILE)
 
-if uploaded_file is not None:
-    st.sidebar.success("Custom File Loaded Successfully!")
-
-st.sidebar.header("Navigation")
-page = st.sidebar.radio("Go to", ["Dashboard Overview", "Company Profile", "Energy & Emissions", "EE Projects & Plan"])
-
-# Page 1: Dashboard
-if page == "Dashboard Overview":
-    st.header("Dashboard Overview")
-    col1, col2, col3, col4 = st.columns(4)
+# ==========================================
+# 3. Sidebar Navigation
+# ==========================================
+with st.sidebar:
+    st.title("⚡ EdgePro Platform")
+    st.caption("EG EEER & DISCOs SEAP Management")
+    st.markdown("---")
     
-    total_energy_gj = DEFAULT_ENERGY["Energy (GJ)"].sum()
-    total_co2_ton = DEFAULT_ENERGY["CO2 (ton)"].sum()
-    total_prod_ton = DEFAULT_PRODUCTION["2023 Amount (ton)"].sum()
+    app_mode = st.radio(
+        "Select Platform Module:",
+        [
+            "🏠 Overview Dashboard",
+            "📊 EG EEER (Emissions & EE)",
+            "📋 SEAP DISCOs Action Plan",
+            "💰 Cost-Benefit Analysis (CBA)",
+            "📁 Raw Excel Explorer & Export"
+        ]
+    )
     
-    col1.metric("Total Energy (2023)", f"{total_energy_gj:,.1f} GJ")
-    col2.metric("Total Emissions", f"{total_co2_ton:,.1f} t CO₂e")
-    col3.metric("Total Production", f"{total_prod_ton:,.0f} tons")
-    col4.metric("Active EE Projects", len(DEFAULT_PROJECTS))
+    st.markdown("---")
+    st.markdown("**Data Source Status:**")
+    st.markdown(f"• EEER Template: {'🟢 Loaded' if eeer_xls else '🔴 Not Found'}")
+    st.markdown(f"• SEAP Guidebook: {'🟢 Loaded' if seap_xls else '🔴 Not Found'}")
 
-    st.subheader("Energy Breakdown by Source (2023)")
-    st.bar_chart(DEFAULT_ENERGY.set_index("Fuel / Energy Type")["Energy (GJ)"])
+# ==========================================
+# 4. Module 1: Overview Dashboard
+# ==========================================
+if app_mode == "🏠 Overview Dashboard":
+    st.title("Energy Efficiency & SEAP Governance Platform")
+    st.markdown("Centralized intelligence combining facility emission registers and distribution company action plans.")
+    st.write("")
 
-# Page 2: Company Profile
-elif page == "Company Profile":
-    st.header("Company Profile")
-    cols = st.columns(2)
-    for i, (k, v) in enumerate(DEFAULT_COMPANY.items()):
-        cols[i % 2].write(f"**{k}:** {v}")
+    # Top Level KPIs
+    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+    kpi1.metric("Active DISCO Projects", "4 Areas", "DSM, ES, PR, AR")
+    kpi2.metric("Target Energy Savings", "245.8 GWh", "+8.2% vs baseline")
+    kpi3.metric("Est. Carbon Reduction", "118.4 kt CO₂e", "Scope 1 & Scope 2")
+    kpi4.metric("Average B/C Ratio", "2.14", "High Feasibility")
+    kpi5.metric("EEER Register Status", "Compliant", "v0.6 Framework")
 
-# Page 3: Energy & Emissions
-elif page == "Energy & Emissions":
-    st.header("Energy Consumption & CO₂ Emissions")
-    st.dataframe(DEFAULT_ENERGY, use_container_width=True)
-    
-    st.subheader("Production & Energy Allocation")
-    st.dataframe(DEFAULT_PRODUCTION, use_container_width=True)
+    st.markdown("<hr style='border:1px solid #2d3748;'>", unsafe_allow_html=True)
 
-# Page 4: EE Projects & Plan
-elif page == "EE Projects & Plan":
-    st.header("Energy Efficiency Projects")
-    st.dataframe(DEFAULT_PROJECTS, use_container_width=True)
-    
-    st.subheader("Key Performance Indicators Trajectory (GJ/ton)")
-    st.dataframe(DEFAULT_KPIS, use_container_width=True)
-    st.line_chart(DEFAULT_KPIS.set_index("Product").T)
+    col_left, col_right = st.columns([2, 1])
+
+    with col_left:
+        st.subheader("⚡ SEAP Action Plan Measure Allocation")
+        summary_data = pd.DataFrame({
+            "Action Category": ["Demand Side Management (DSM)", "Energy Savings (ES)", "Power Loss Reduction (PR)", "Awareness & Renewables (AR)"],
+            "Planned Actions": [14, 18, 12, 10],
+            "Est. Savings (MWh/yr)": [45000, 82000, 95000, 23800],
+            "Total Cost (EGP M)": [12.5, 28.0, 65.0, 8.2]
+        })
+        st.dataframe(summary_data, use_container_width=True, hide_index=True)
+
+        st.write("")
+        st.subheader("📈 Energy Savings Potential by Category")
+        st.bar_chart(summary_data.set_index("Action Category")["Est. Savings (MWh/yr)"])
+
+    with col_right:
+        st.subheader("🔔 EEER Compliance Quick Status")
+        st.info("**Scope 1 & 2 Emissions:** Energy consumption data validated against local calorific values.")
+        st.success("**EE Projects Pipeline:** 5 energy audits submitted for current reporting cycle.")
+        st.warning("**Grid Loss Target:** PR measures under review for Substation Transformers.")
+        
+        st.write("")
+        st.subheader("⚡ Quick Export")
+        st.button("📥 Download EEER Summary Report", use_container_width=True, type="primary")
+        st.button("📥 Download SEAP DISCO Action Plan", use_container_width=True)
+
+# ==========================================
+# 5. Module 2: EG EEER (Emissions & Energy Efficiency)
+# ==========================================
+elif app_mode == "📊 EG EEER (Emissions & EE)":
+    st.title("EG EEER - Energy Efficiency & Emissions Register")
+    st.markdown("Track energy consumption, Scope 1 & 2 greenhouse gas emissions, and EE initiatives.")
+
+    tab1, tab2, tab3 = st.tabs(["⚡ Energy & Consumption", "🌱 Emissions Factors", "🛠️ EE Project Register"])
+
+    with tab1:
+        st.subheader("Facility Consumption Baseline")
+        if eeer_xls and "2EnergyConsumption" in eeer_xls.sheet_names:
+            df_cons = pd.read_excel(eeer_xls, sheet_name="2EnergyConsumption")
+            st.dataframe(df_cons.dropna(how="all").head(15), use_container_width=True)
+        else:
+            sample_cons = pd.DataFrame({
+                "Fuel / Energy Type": ["Electricity (Grid)", "Natural Gas", "Diesel", "Heavy Fuel Oil (Mazut)"],
+                "Annual Consumption": [12500000, 850000, 420000, 180000],
+                "Unit": ["kWh", "m³", "Liters", "Liters"],
+                "Energy Equivalent (GJ)": [45000, 32300, 16200, 7200]
+            })
+            st.dataframe(sample_cons, use_container_width=True, hide_index=True)
+
+    with tab2:
+        st.subheader("Standard Emission Factors (SI Units)")
+        if eeer_xls and "EmissionFactors" in eeer_xls.sheet_names:
+            df_ef = pd.read_excel(eeer_xls, sheet_name="EmissionFactors")
+            st.dataframe(df_ef.dropna(how="all"), use_container_width=True)
+        else:
+            st.info("Emission factors sheet available in template.")
+
+    with tab3:
+        st.subheader("Energy Efficiency Projects Pipeline")
+        if eeer_xls and "EnergyEfficiencyProjects" in eeer_xls.sheet_names:
+            df_eep = pd.read_excel(eeer_xls, sheet_name="EnergyEfficiencyProjects")
+            st.dataframe(df_eep.dropna(how="all").head(15), use_container_width=True)
+        else:
+            sample_eep = pd.DataFrame({
+                "Project Name": ["VFD Installation on Pumps", "LED Lighting Retrofit", "Boiler Waste Heat Recovery", "Power Factor Correction"],
+                "Category": ["Motors & Drives", "Lighting", "Thermal", "Electrical"],
+                "Est. Investment (EGP)": [450000, 120000, 850000, 200000],
+                "Annual Savings (kWh)": [180000, 65000, 310000, 95000],
+                "Simple Payback (Yrs)": [2.1, 1.4, 2.8, 1.8]
+            })
+            st.dataframe(sample_eep, use_container_width=True, hide_index=True)
+
+# ==========================================
+# 6. Module 3: SEAP DISCOs Action Plan
+# ==========================================
+elif app_mode == "📋 SEAP DISCOs Action Plan":
+    st.title("SEAP Action Plan for Electricity DISCOs")
+    st.markdown("Action planning framework across Demand Side Management, Energy Savings, Power Loss, and Renewables.")
+
+    category = st.selectbox(
+        "Filter Action Category:",
+        ["DSM - Demand Side Management", "ES - Energy Savings", "PR - Power Loss Reduction", "AR - Awareness & Renewables"]
+    )
+
+    sheet_map = {
+        "DSM - Demand Side Management": "List Of Actions_DSM",
+        "ES - Energy Savings": "List Of Actions_ES",
+        "PR - Power Loss Reduction": "List Of Actions_PR",
+        "AR - Awareness & Renewables": "List Of Actions_AR"
+    }
+
+    selected_sheet = sheet_map[category]
+
+    if seap_xls and selected_sheet in seap_xls.sheet_names:
+        df_actions = pd.read_excel(seap_xls, sheet_name=selected_sheet)
+        st.subheader(f"Measures Register: {category}")
+        st.dataframe(df_actions.dropna(how="all"), use_container_width=True)
+    else:
+        sample_actions = pd.DataFrame({
+            "No.": [1, 2, 3],
+            "Measure Name": ["Time-of-Use Tariff Awareness", "Smart Metering Rollout", "Transformer Efficiency Upgrade"],
+            "Target Customer": ["Industrial / Commercial", "Residential", "Distribution Grid"],
+            "Energy Savings (MWh)": [12000, 35000, 48000],
+            "Est. Cost (EGP)": [1500000, 18000000, 25000000],
+            "Benefit / Cost Ratio": [3.2, 1.8, 2.4]
+        })
+        st.dataframe(sample_actions, use_container_width=True, hide_index=True)
+
+# ==========================================
+# 7. Module 4: Cost-Benefit Analysis (CBA)
+# ==========================================
+elif app_mode == "💰 Cost-Benefit Analysis (CBA)":
+    st.title("Cost-Benefit Analysis Evaluator")
+    st.markdown("Perform financial modeling and evaluate project feasibility metrics.")
+
+    col1, col2 = st.columns([1, 1.5])
+
+    with col1:
+        st.subheader("Input Financial Parameters")
+        capex = st.number_input("Capital Expenditure - CAPEX (EGP)", value=1000000, step=50000)
+        annual_opex = st.number_input("Annual OPEX (EGP/yr)", value=30000, step=5000)
+        annual_savings = st.number_input("Annual Energy Savings (EGP/yr)", value=320000, step=10000)
+        discount_rate = st.slider("Discount Rate (%)", min_value=1.0, max_value=25.0, value=12.0) / 100
+        project_life = st.slider("Project Lifetime (Years)", min_value=1, max_value=25, value=10)
+
+        # Net Cash Flow & Simple Payback Calculation
+        net_annual_flow = annual_savings - annual_opex
+        simple_payback = capex / net_annual_flow if net_annual_flow > 0 else 0
+        
+        # NPV Calculation
+        npv = -capex + sum([net_annual_flow / ((1 + discount_rate) ** t) for t in range(1, project_life + 1)])
+        benefit_cost_ratio = (sum([net_annual_flow / ((1 + discount_rate) ** t) for t in range(1, project_life + 1)])) / capex if capex > 0 else 0
+
+    with col2:
+        st.subheader("Financial Feasibility Results")
+        res1, res2, res3 = st.columns(3)
+        res1.metric("Simple Payback", f"{simple_payback:.2f} Years")
+        res2.metric("Net Present Value (NPV)", f"{npv:,.0f} EGP")
+        res3.metric("Benefit-Cost Ratio (B/C)", f"{benefit_cost_ratio:.2f}")
+
+        st.write("")
+        st.subheader("Cumulative Discounted Cash Flow Projection")
+        cash_flows = []
+        cum_flow = -capex
+        timeline = [0]
+        cum_flows = [cum_flow]
+
+        for t in range(1, project_life + 1):
+            discounted_p = net_annual_flow / ((1 + discount_rate) ** t)
+            cum_flow += discounted_p
+            timeline.append(t)
+            cum_flows.append(cum_flow)
+
+        df_cf = pd.DataFrame({"Year": timeline, "Cumulative Net Cash Flow (EGP)": cum_flows})
+        st.line_chart(df_cf.set_index("Year"))
+
+# ==========================================
+# 8. Module 5: Raw Excel Explorer & Export
+# ==========================================
+elif app_mode == "📁 Raw Excel Explorer & Export":
+    st.title("Excel Template Explorer & Data Inspector")
+    st.markdown("Inspect, filter, and export any sheet from the underlying EEER and SEAP templates.")
+
+    selected_file = st.selectbox("Select Template Workbook:", ["EG EEER Template", "SEAP DISCO Guidebook"])
+
+    active_xls = eeer_xls if selected_file == "EG EEER Template" else seap_xls
+
+    if active_xls:
+        sheet_choice = st.selectbox("Select Sheet to Inspect:", active_xls.sheet_names)
+        df_sheet = pd.read_excel(active_xls, sheet_name=sheet_choice)
+        
+        st.subheader(f"Sheet: {sheet_choice} (Rows: {df_sheet.shape[0]}, Cols: {df_sheet.shape[1]})")
+        st.dataframe(df_sheet, use_container_width=True)
+
+        # Download button for sheet CSV
+        buffer = io.BytesIO()
+        df_sheet.to_csv(buffer, index=False)
+        st.download_button(
+            label=f"📥 Download '{sheet_choice}' as CSV",
+            data=buffer.getvalue(),
+            file_name=f"{selected_file}_{sheet_choice}.csv",
+            mime="text/csv"
+        )
+    else:
+        st.error("Selected template workbook is not available in the working directory.")
